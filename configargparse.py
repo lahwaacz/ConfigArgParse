@@ -286,7 +286,7 @@ class ArgumentParser(argparse.ArgumentParser):
             config_streams = self._open_config_files(args)
 
         # parse each config file
-        for stream in config_streams[::-1]:
+        for stream in reversed(config_streams):
             try:
                 config_settings = self._config_file_parser.parse(stream)
             except ConfigFileParserException as e:
