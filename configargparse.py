@@ -500,22 +500,25 @@ class ArgumentParser(argparse.ArgumentParser):
         Args:
             command_line_args: List of all args (already split on spaces)
         """
-        # open any default config files
-        config_files = [open(f) for f in map(
-            os.path.expanduser, self._default_config_files) if os.path.isfile(f)]
-
-        if not command_line_args:
+        def handle_default_config_files(list_of_config_paths):
+            # open only the default config with the highest priority to avoid
+            # merging items from multiple default sources
+            config_files = []
+            for f in reversed(list_of_config_paths):
+                f = os.path.expanduser(f)
+                if os.path.isfile(f):
+                    config_files.append(open(f))
+                    break
             return config_files
 
         # list actions with is_config_file_arg=True. Its possible there is more
         # than one such arg.
-        user_config_file_arg_actions = [
+        config_file_arg_actions = [
             a for a in self._actions if getattr(a, "is_config_file_arg", False)]
 
-        if not user_config_file_arg_actions:
-            return config_files
-
-        for action in user_config_file_arg_actions:
+        default_config_files = self._default_config_files.copy()
+        open_config_files = []
+        for action in config_file_arg_actions:
             # try to parse out the config file path by using a clean new
             # ArgumentParser that only knows this one arg/action.
             arg_parser = argparse.ArgumentParser(
@@ -530,23 +533,38 @@ class ArgumentParser(argparse.ArgumentParser):
             def error_method(self, message):
                 pass
             arg_parser.error = types.MethodType(error_method, arg_parser)
+            namespace, _ = arg_parser.parse_known_args(args=command_line_args)
+            config_arg = getattr(namespace, action.dest, None)
 
-            # check whether the user provided a value 
-            parsed_arg = arg_parser.parse_known_args(args=command_line_args)
-            if not parsed_arg:
+            if config_arg is None:
+                # skip empty args
                 continue
-            namespace, _ = parsed_arg
-            user_config_file = getattr(namespace, action.dest, None)
-            if not user_config_file:
-                continue
-            # validate the user-provided config file path
-            user_config_file = os.path.expanduser(user_config_file)
-            if not os.path.isfile(user_config_file):
-                self.error('File not found: %s' % user_config_file)
+            elif isinstance(config_arg, str):
+                # a single value for action="store"
+                config_arg = [config_arg]
+            elif not isinstance(config_arg, list):
+                self.error('File not found: %s' % config_arg)
 
-            config_files += [open(user_config_file)]
+            # config_arg is now a list, e.g. when there were multiple default
+            # config files set with add_argument, e.g.
+            #    default=["foo.conf", "bar.conf"]
+            for config_file in config_arg:
+                config_file = os.path.expanduser(config_file)
+                # check if the config path is the default or user-provided
+                if config_file == action.default:
+                    default_config_files.append(config_file)
+                else:
+                    # Validate only the user-provided config file path. Default
+                    # config files are not required to exist.
+                    if not os.path.isfile(config_file):
+                        self.error('File not found: %s' % config_file)
+                    open_config_files.append(open(config_file))
 
-        return config_files
+        # handle default config files, open only one of them
+        if len(open_config_files) == 0:
+            return handle_default_config_files(default_config_files)
+
+        return open_config_files
 
     def format_values(self):
         """Returns a string with all args and settings and where they came from

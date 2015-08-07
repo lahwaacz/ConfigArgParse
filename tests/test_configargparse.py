@@ -180,14 +180,15 @@ class TestBasicUseCases(TestCase):
             '  --format: \s+ BED\n')
 
         # check precedence: args > env > config > default using the --format arg
+        # The default config file should not be opened when there is another
+        # config file specified, otherwise it is impossible to unset an option
+        # which is set in the default config.
         default_config_file.write("--format MAF")
         default_config_file.flush()
         ns = self.parse(args="--genome hg19 -g %s f.vcf " % config_file2.name)
-        self.assertEqual(ns.fmt, "MAF")
+        self.assertEqual(ns.fmt, "BED")
         self.assertRegex(self.format_values(),
-            'Command Line Args:   --genome hg19 -g [^\s]+ f.vcf\n'
-            'Config File \([^\s]+\):\n'
-            '  --format: \s+ MAF\n')
+            'Command Line Args:   --genome hg19 -g [^\s]+ f.vcf\n')
 
         config_file2.write("--format VCF")
         config_file2.flush()
@@ -534,10 +535,11 @@ class TestMisc(TestCase):
         self.assertIsNotNone(action)
         self.assertEqual(action.dest, "positional")
 
-    def testAddArguments_IsConfigFilePathArg(self):
+    def testAddArguments_IsConfigFilePathArgBool(self):
         self.assertRaises(ValueError, self.add_arg, 'c', action="store_false",
                           is_config_file=True)
 
+    def testAddArguments_IsConfigFilePathArg(self):
         self.add_arg("-c", "--config", is_config_file=True)
         self.add_arg("--x", required=True)
 
@@ -568,11 +570,11 @@ class TestMisc(TestCase):
                                    if sys.version_info < (3,3) else
                                    "arguments are required: -c/--config",)
 
-        temp_cfg2 = tempfile.NamedTemporaryFile(mode="w", delete=True)
-        ns = self.parse("-c " + temp_cfg2.name)
+        ns = self.parse("-c " + temp_cfg.name)
         self.assertEqual(ns.genome, "hg19")
 
         # temp_cfg2 config file should override default config file values
+        temp_cfg2 = tempfile.NamedTemporaryFile(mode="w", delete=True)
         temp_cfg2.write("genome=hg20")
         temp_cfg2.flush()
         ns = self.parse("-c " + temp_cfg2.name)
