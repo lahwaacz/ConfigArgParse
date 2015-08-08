@@ -288,7 +288,8 @@ class ArgumentParser(argparse.ArgumentParser):
         # parse each config file
         for stream in reversed(config_streams):
             try:
-                config_settings = self._config_file_parser.parse(stream)
+                config_settings = self._config_file_parser.parse(stream,
+                                                                 context=args)
             except ConfigFileParserException as e:
                 self.error(e)
             finally:
@@ -656,7 +657,7 @@ class ArgumentParser(argparse.ArgumentParser):
 
 class ConfigFileParser(object):
 
-    def parse(self, stream):
+    def parse(self, stream, context=None):
         """Parses a config file and return a dictionary of settings"""
 
         settings = OrderedDict()
