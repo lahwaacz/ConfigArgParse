@@ -443,7 +443,7 @@ class TestBasicUseCases(TestCase):
         self.initParser(allow_unknown_config_file_keys=False)
         ns, args = self.parse_known(args="-x 1", config_file_contents="bla=3",
             env_vars={"bla": "2"})
-        self.assertListEqual(args, ["-x", "1", "--bla", "3"])
+        self.assertListEqual(args, ["--bla", "3", "-x", "1"])
 
     def testConfigOrEnvValueErrors(self):
         # error should occur when a non-flag arg is set to True
